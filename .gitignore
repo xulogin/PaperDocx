@@ -1,0 +1,8 @@
+﻿__pycache__/
+*.pyc
+_预览/
+_预览LO/
+_同步快照.json
+_待跟中文.txt
+*.docx
+*.pdf

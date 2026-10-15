@@ -1,0 +1,7 @@
+{
+  "name": "paperdocx",
+  "version": "1.0.0",
+  "description": "把 Markdown 论文排成投稿级 Word：三线表、公式双列隐藏边框、Zotero 活引用（可去 DOI）、图表自动定宽；md 和 docx 双向联动，改 docx 的样式不会被冲掉。",
+  "author": { "name": "xulogin" },
+  "skills": ["./skills/paperdocx"]
+}

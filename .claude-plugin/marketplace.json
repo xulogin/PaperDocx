@@ -1,0 +1,12 @@
+{
+  "name": "paperdocx",
+  "owner": { "name": "xulogin" },
+  "plugins": [
+    {
+      "name": "paperdocx",
+      "source": "./",
+      "description": "Markdown 论文 → 投稿级 Word（三线表 / 公式双列 / Zotero 活引用 / md↔docx 联动）",
+      "version": "1.0.0"
+    }
+  ]
+}
