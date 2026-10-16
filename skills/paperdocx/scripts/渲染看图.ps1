@@ -21,15 +21,33 @@
      里 13 秒就导完了。所以 Word 那段统一在子作业里跑，还带超时，卡了就报出来。
 #>
 param(
-  [string]$Docx = "C_英文稿V41_排版版.docx",
+  [string]$Docx = "",          # 留空 = 自动找项目里最新的 *_排版版.docx
   [int]$Dpi = 100,
-  [string]$Out = "_工作区\排版\_预览",
+  [string]$Out = "",           # 留空 = <脚本目录>\_预览
   [int]$TimeoutSec = 300
 )
 $ErrorActionPreference = "Stop"
-$root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$src  = if ([System.IO.Path]::IsPathRooted($Docx)) { $Docx } else { Join-Path $root $Docx }
+
+# ★ 项目根**不许写死层级**。往上找，第一个含 *_排版版.docx 或 *_英文版.md 的目录就是根。
+#   （写死 `parents[2]` 的代价实测过：脚本在 demo/排版/ 下时找到的是 skill 的目录。）
+$root = $null
+$d = $PSScriptRoot
+while ($d -and -not $root) {
+  if ((Get-ChildItem $d -Filter "*_排版版.docx" -ErrorAction SilentlyContinue) -or
+      (Get-ChildItem $d -Filter "*_英文版.md"  -ErrorAction SilentlyContinue)) { $root = $d }
+  $d = Split-Path -Parent $d
+}
+if (-not $root) { throw "往上找不到项目根（判据：某层目录里有 *_排版版.docx 或 *_英文版.md）" }
+
+if (-not $Docx) {
+  $cand = Get-ChildItem $root -Filter "*_排版版.docx" | Sort-Object Name
+  if (-not $cand) { throw "$root 里没有 *_排版版.docx，先跑 出Word.py" }
+  $src = $cand[-1].FullName            # 字典序最大 = 版本号最大
+} elseif ([System.IO.Path]::IsPathRooted($Docx)) { $src = $Docx }
+else { $src = Join-Path $root $Docx }
 if (-not (Test-Path $src)) { throw "找不到 $src" }
+
+if (-not $Out) { $Out = Join-Path $PSScriptRoot "_预览" }
 $outDir = if ([System.IO.Path]::IsPathRooted($Out)) { $Out } else { Join-Path $root $Out }
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $pdf = Join-Path $outDir ([System.IO.Path]::GetFileNameWithoutExtension($src) + ".pdf")

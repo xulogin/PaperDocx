@@ -1,0 +1,22 @@
+{
+ "ref1": {
+  "itemKey": "DEMOKEY01",
+  "itemID": 1001,
+  "uri": "http://zotero.org/users/local/demo/items/DEMOKEY01"
+ },
+ "ref2": {
+  "itemKey": "DEMOKEY02",
+  "itemID": 1002,
+  "uri": "http://zotero.org/users/local/demo/items/DEMOKEY02"
+ },
+ "ref3": {
+  "itemKey": "DEMOKEY03",
+  "itemID": 1003,
+  "uri": "http://zotero.org/users/local/demo/items/DEMOKEY03"
+ },
+ "ref4": {
+  "itemKey": "DEMOKEY04",
+  "itemID": 1004,
+  "uri": "http://zotero.org/users/local/demo/items/DEMOKEY04"
+ }
+}

@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 r"""英文版 md → 排版好的 Word。**全量重建**，每次重跑都从 md 出发。
 
-    py -3.12 -X utf8 _工作区/排版/出Word.py
-    py -3.12 -X utf8 _工作区/排版/出Word.py --出 某个名字.docx
+    py -3.12 -X utf8 <scripts>/出Word.py                       # 出最新一版
+    py -3.12 -X utf8 <scripts>/出Word.py --标红对照 上一版_英文版.md  # 改动标红
+    py -3.12 -X utf8 <scripts>/出Word.py --图dpi 300 --出 _预览.docx  # 快速预览版
 
-产物：`C_英文稿V41_排版版.docx`
+产物：`<稿名>_排版版.docx`
 
 ## 它做了什么
 
@@ -18,13 +19,12 @@ r"""英文版 md → 排版好的 Word。**全量重建**，每次重跑都从 m
 
 ## 关键约定
 
-* 每个 md 块在 docx 里起始处埋一个书签 `TTG0001`、`TTG0002`……
-  `三方同步.py` 靠它把 Word 段落认回 md 块。**别手动删书签。**
+* 每个 md 块在 docx 里起始处埋一个书签 `PDX0001`、`PDX0002`……
+  `三方同步.py` 靠它把 Word 段落认回 md 块（前缀见 排版配置.锚点前缀）。**别手动删书签。**
 * 行内公式和引用在 Word 里是 OMML / Zotero 字段，**只认 md 为准**。
   在 Word 里改公式或引用，同步会报错不写。
-* 参考文献：RSE（Elsevier Harvard）**不出 DOI**，样式文件
-  `引用数据/elsevier-harvard-nodoi.csl`。Zotero 里的 DOI 字段一个都没动。
-* `ref58`（Loshchilov & Hutter, AdamW）按 CLAUDE.md 剔除，正文已 0 处引用。
+* 参考文献走 Zotero 活字段；**不出 DOI** 的做法是把 CSL 的 `access` 宏掏空，
+  **Zotero 库里的 DOI 一个都不用删**（见 references/zotero接法.md）。
 
 ## 踩过的坑
 
@@ -63,7 +63,7 @@ import _zotero字段 as Z                                # noqa: E402
 import docx读写 as D                                   # noqa: E402
 
 import _项目                                           # noqa: E402
-根 = _项目.找根(这里)
+根 = _项目.找根()   # ★ 不传参数：先从当前工作目录找，再从脚本位置找
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 MATH = "{http://schemas.openxmlformats.org/officeDocument/2006/math}"
 DRAW = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
@@ -73,9 +73,26 @@ DRAW = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 
 
 # ══════════════════════════════════════════════════ 引用
+def 找引用数据() -> Path:
+    r"""`引用数据/` 可以放在脚本旁边，也可以放在项目根。
+
+    ★ 为什么要两处都找：skill 装好之后，`scripts/` 在插件缓存里（只读、所有项目共用），
+      而 `references.json` / `.csl` 是**每个项目各自的**，只能放项目里。
+      写死 `这里 / "引用数据"` 的话，直接跑 `<插件>/scripts/出Word.py` 就找不到。
+    """
+    for d in (根 / "引用数据", 根 / "排版" / "引用数据",
+              根 / "_工作区" / "排版" / "引用数据", 这里 / "引用数据"):
+        if d.is_dir() and any(d.glob("*.json")):
+            return d
+    raise SystemExit(
+        "⛔ 找不到 `引用数据/`（要有 references.json 和 zot_match_index.json）。\n"
+        f"   找过：{根}/引用数据、{根}/排版/引用数据、{这里}/引用数据\n"
+        "   怎么准备见 references/zotero接法.md")
+
+
 class 引用库:
     def __init__(self):
-        d = 这里 / "引用数据"
+        d = 找引用数据()
         self.条目 = {r["id"]: r for r in json.loads((d / "references.json").read_text("utf-8"))}
         self.索引 = json.loads((d / "zot_match_index.json").read_text("utf-8"))
         self.渲染 = {}
@@ -721,7 +738,7 @@ def _插文本(锚, 文, rpr):
     return r
 
 
-def 做无DOI样式(装进Zotero=True):
+def 做无DOI样式(装进Zotero=None):
     r"""把 elsevier-harvard.csl 复制一份、把 access 宏掏空 → 不出 DOI / URL。
     **Zotero 库里的 DOI 字段一个都没动**，只是这个样式不去印它。
 
@@ -730,25 +747,50 @@ def 做无DOI样式(装进Zotero=True):
     Zotero 会按它自己装着的 elsevier-harvard 重排，DOI 又回来了。
     ★ 装完要**重启 Zotero** 才认得这个样式。
     """
-    出 = 这里 / "引用数据" / "elsevier-harvard-nodoi.csl"
-    源 = (这里 / "引用数据" / "elsevier-harvard.csl").read_text("utf-8")
-    文 = re.sub(r'<macro name="access">.*?</macro>',
-                '<macro name="access"><text value=""/></macro>', 源, flags=re.S)
-    if 文 == 源:
-        raise SystemExit("⛔ 改 CSL 没掏空 access 宏，去核实 elsevier-harvard.csl 的结构")
+    d = 找引用数据()
+    # ★ 底版 CSL 的文件名**不写死** —— 换刊物就是换这个文件。
+    #   配置里指定了就用配置的；没指定就取 引用数据/ 里唯一那个不带 -nodoi 的 .csl。
+    名 = C.文献.get("底版CSL")
+    源路 = (d / 名) if 名 else None
+    if 源路 is None or not 源路.exists():
+        候选 = [p for p in sorted(d.glob("*.csl")) if "-nodoi" not in p.stem]
+        if not 候选:
+            raise SystemExit(
+                f"⛔ {d} 里没有 .csl 引用样式。\n"
+                "   去 Zotero 数据目录的 styles/ 里拷一份刊物指定的样式进来，\n"
+                "   或在 排版配置.文献 里写 底版CSL=\"xxx.csl\"。")
+        源路 = 候选[0]
+        if len(候选) > 1:
+            print(f"  ⚠ 引用数据/ 里有 {len(候选)} 个 .csl，用了 {源路.name}。"
+                  f"要指定就在 排版配置.文献 里写 底版CSL")
+    出 = d / (源路.stem + "-nodoi.csl")
+    源 = 源路.read_text("utf-8")
+    空宏 = '<macro name="access"><text value=""/></macro>'
+    文, n = re.subn(r'<macro name="access">.*?</macro>', 空宏, 源, flags=re.S)
+    if n == 0 and re.search(r'\b(DOI|URL)\b', 源):
+        # 有的样式不走 access 宏，直接在 bibliography 里印 DOI
+        raise SystemExit(
+            f"⛔ {源路.name} 里没有 `access` 宏，但正文里出现了 DOI/URL。\n"
+            "   这个样式印 DOI 的方式不一样，去看它的 <bibliography> 怎么写的，\n"
+            "   手改一份去掉 DOI 的存成 <名>-nodoi.csl，脚本会直接用。")
     # id 和 rel="self" 的 href 必须一致，不一致 Zotero 装样式时会拒
-    文 = 文.replace("http://www.zotero.org/styles/elsevier-harvard</id>",
-                   C.文献["样式ID"] + "</id>")
-    文 = re.sub(r'<link href="http://www\.zotero\.org/styles/elsevier-harvard" rel="self"/>',
-                '<link href="%s" rel="self"/>' % C.文献["样式ID"], 文)
+    # id 和 rel="self" 的 href 必须一致，不一致 Zotero 装样式时会拒
+    文 = re.sub(r"<id>[^<]*</id>", "<id>%s</id>" % C.文献["样式ID"], 文, count=1)
+    文 = re.sub(r'<link href="[^"]*" rel="self"/>',
+                '<link href="%s" rel="self"/>' % C.文献["样式ID"], 文, count=1)
     文 = re.sub(r"<title>[^<]*</title>", "<title>%s</title>" % C.文献["样式名"], 文, count=1)
     文 = re.sub(r"<title-short>[^<]*</title-short>", "", 文, count=1)
     出.write_text(文, encoding="utf-8")
 
     if 装进Zotero:
         import os
-        数据 = Path(os.environ.get("ZOTERO_DATA_DIR") or r"F:\Zotero_storage")
-        目标 = 数据 / "styles" / "elsevier-harvard-nodoi.csl"
+        # Zotero 数据目录：环境变量 ZOTERO_DATA_DIR 优先，否则默认位置。
+        #   （很多人把库挪到别的盘了，所以别写死。）
+        数据 = Path(os.environ.get("ZOTERO_DATA_DIR") or Path.home() / "Zotero")
+        # ★ 文件名跟着源样式走，**不许写死**。
+        #   写死的代价实测过：跑 demo 时把真实项目那份 elsevier-harvard-nodoi.csl
+        #   覆盖成了 demo 的内容。
+        目标 = 数据 / "styles" / 出.name
         if 数据.exists():
             目标.parent.mkdir(exist_ok=True)
             旧 = 目标.read_text("utf-8") if 目标.exists() else None
@@ -839,11 +881,11 @@ def 插文献(doc, 库: 引用库, 被引, csl):
 def 装Zotero偏好(路径):
     """Word 自定义文档属性里的 Zotero 会话信息。没有它，Zotero 不认这是它的文档。"""
     pref = ('<?xml version="1.0"?><data data-version="3" zotero-version="10.0">'
-            '<session id="TopoTreeGenV41"/>'
+            '<session id="%s"/>'
             '<style id="%s" hasBibliography="1" bibliographyStyleHasBeenSet="1"/>'
             '<prefs><pref name="fieldType" value="Field"/>'
             '<pref name="automaticJournalAbbreviations" value="false"/></prefs></data>'
-            % C.文献["样式ID"])
+            % (C.文献.get("会话ID", "PaperDocx"), C.文献["样式ID"]))
     ns = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
     vt = "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"
     custom = etree.Element("{%s}Properties" % ns, nsmap={None: ns, "vt": vt})

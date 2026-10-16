@@ -8,7 +8,7 @@ r"""在排版好的 docx 上**只读文字 / 只写文字**，样式一个都不
 
 ## 怎么认出「这段是 md 的哪一块」
 
-出Word.py 在每块起始处埋了书签 `TTG0001`。读的时候按书签名定位。
+出Word.py 在每块起始处埋了书签 `PDX0001`（前缀见 排版配置.锚点前缀）。读的时候按书签名定位。
 书签在 Word 里编辑正文不会掉；**整段删掉才会掉**，掉了就报出来让人看，不猜。
 
 ## 写回时的原则
@@ -33,6 +33,7 @@ from docx.oxml.ns import qn
 这里 = Path(__file__).resolve().parent
 sys.path.insert(0, str(这里))
 import 块模型 as M                      # noqa: E402
+import 排版配置 as C                     # noqa: E402
 import _zotero字段 as Z                 # noqa: E402
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
@@ -45,7 +46,7 @@ def 书签表(doc):
     出 = {}
     for bm in doc.element.body.iter(qn("w:bookmarkStart")):
         名 = bm.get(qn("w:name"))
-        if not re.fullmatch(r"TTG\d{4}", 名 or ""):
+        if not re.fullmatch(r"%s\d{4}" % re.escape(C.锚点前缀), 名 or ""):
             continue
         父 = bm.getparent()
         if 父.tag == qn("w:p"):
@@ -230,7 +231,7 @@ def 写段(p, 新串, 条目id表=None):
     底 = _底版rpr(p)
     ppr = p.find(W + "pPr")
     # ★ 书签必须留着！清段落内容时连 bookmarkStart/End 一起删掉的话，
-    #   下一轮同步就认不回这一块了（实测报 KeyError: 'TTG0018'）。
+    #   下一轮同步就认不回这一块了（实测报 KeyError: 'PDX0018'）。
     书签 = [子 for 子 in p
           if 子.tag in (qn("w:bookmarkStart"), qn("w:bookmarkEnd"))]
     for 子 in list(p):

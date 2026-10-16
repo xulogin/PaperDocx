@@ -4,5 +4,6 @@ _预览/
 _预览LO/
 _同步快照.json
 _待跟中文.txt
-*.docx
-*.pdf
+*-nodoi.csl
+skills/paperdocx/demo/*.docx
+skills/paperdocx/demo/排版/

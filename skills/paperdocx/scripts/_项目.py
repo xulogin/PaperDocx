@@ -39,16 +39,25 @@ from pathlib import Path
 
 
 def 找根(起=None) -> Path:
-    起 = Path(起 or __file__).resolve()
-    for d in [起] + list(起.parents):
-        if not d.is_dir():
-            continue
-        if (d / "稿件配置.py").exists() or any(d.glob(默认["通配"])):
-            return d
+    r"""★ 先从**当前工作目录**往上找，再从脚本位置往上找。
+
+    顺序不能反：skill 装好之后脚本在插件缓存里（`~/.claude/plugins/cache/...`），
+    从那儿往上找永远找不到用户的项目。实测报
+    「从 .../skills/paperdocx/scripts 往上找了一遍，都没有」。
+    """
+    试 = []
+    for 起点 in ([Path(起).resolve()] if 起 else [Path.cwd(), Path(__file__).resolve()]):
+        for d in [起点] + list(起点.parents):
+            if not d.is_dir() or d in 试:
+                continue
+            试.append(d)
+            if (d / "稿件配置.py").exists() or any(d.glob(默认["通配"])):
+                return d
     raise SystemExit(
         "⛔ 找不到项目根目录。\n"
         "   判据是：某一层目录里有 `C_英文稿V*_英文版.md`，或者有 `稿件配置.py`。\n"
-        f"   从 {起} 往上找了一遍，都没有。")
+        f"   从当前目录 {Path.cwd()} 和脚本位置各往上找了一遍，都没有。\n"
+        "   ⇒ **在项目目录里跑**，或者给 `--根 <路径>`。")
 
 
 def 配置(根: Path) -> dict:

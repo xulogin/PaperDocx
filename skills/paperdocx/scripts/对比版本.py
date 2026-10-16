@@ -34,7 +34,7 @@ sys.path.insert(0, str(这里.parent))
 import 块模型 as M                                    # noqa: E402
 
 import _项目                                           # noqa: E402
-根 = _项目.找根(这里)
+根 = _项目.找根()   # ★ 不传参数：先从当前工作目录找，再从脚本位置找
 
 # WriteKit 从 RSE 实测的分节词数（中位, 四分位）。见 `_工作区/按RSE惯例体检.py`
 RSE基准 = {"Abstract": (336, (234, 404)), "1 Introduction": (1240, (1023, 1446)),

@@ -56,8 +56,9 @@ import _项目                                          # noqa: E402
 # ══════════════════════════════════════════════════ 引用对照
 def 载引用():
     渲染 = {}
+    import 出Word
     映 = next(p for p in (根 / "引用映射.tsv", 根 / "_工作区/引用映射.tsv",
-                         这里 / "引用数据/引用映射.tsv") if p.exists())
+                         出Word.找引用数据() / "引用映射.tsv") if p.exists())
     for line in 映.read_text("utf-8").splitlines()[1:]:
         ref, 文 = line.split("\t")
         渲染[ref] = 文
@@ -65,7 +66,8 @@ def 载引用():
     形 = sorted(渲染.values(), key=len, reverse=True)
     单 = "|".join(re.escape(s) for s in 形)
     反查["__正则__"] = re.compile(r"\((%s)(?:; (?:%s))*\)" % (单, 单))
-    索引 = json.loads((这里 / "引用数据/zot_match_index.json").read_text("utf-8"))
+    import 出Word
+    索引 = json.loads((出Word.找引用数据() / "zot_match_index.json").read_text("utf-8"))
     条目id表 = {v["itemKey"]: k for k, v in 索引.items()}
     return 渲染, 反查, 条目id表
 
@@ -171,7 +173,11 @@ def 主():
     渲染, 反查, 条目id表 = 载引用()
 
     甲 = M.读英文版(英文版)                      # A：英文版 md
-    乙 = M.读对照版(对照版)                      # B：对照版 md
+    # ★ 对照版是**可选**的。只有「作者只读中文、要中英对照」的项目才有它；
+    #   纯英文项目就只同步「英文版 ↔ docx」两方。
+    有对照 = 对照版.exists()
+    乙 = M.读对照版(对照版) if 有对照 else [
+        M.块(b.序, b.类型, b.文本) for b in 甲]
     if len(甲) != len(乙):
         raise SystemExit(f"⛔ 英文版 {len(甲)} 块 ≠ 对照版 {len(乙)} 块。"
                          "有人在某一边加删了整段，同步认不回去，先人工对齐。")
@@ -260,7 +266,8 @@ def 主():
             写回docx块(b, 值, 丙位, 条目id表)
 
     M.写英文版(英文版, 甲)
-    M.写对照版(对照版, 乙)
+    if 有对照:
+        M.写对照版(对照版, 乙)
     doc.save(排版版)
     # python-docx 存盘后 docProps/custom.xml（Zotero 会话信息）不一定还在，
     # 掉了的话 Zotero 就不认这个文档了。无脑补一次，幂等。
@@ -288,6 +295,7 @@ def 存快照(甲, 乙, 条目id表, 反查):
             continue
         块[b.锚] = {"英文版": 甲值.get(b.序), "对照版": 乙值.get(b.序),
                    "Word": 丙值.get(b.序)}
+    # 没有对照版时，它和英文版永远一致，不该参与「谁改了」的判断
     快照路径.write_text(json.dumps({"说明": "上次同步完成时三方的样子，别手删",
                                  "块": 块}, ensure_ascii=False, indent=0),
                      encoding="utf-8")

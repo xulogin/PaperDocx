@@ -1,0 +1,114 @@
+[
+ {
+  "id": "ref1",
+  "type": "article-journal",
+  "title": "Gauge density and the representativeness of urban flood forecasts",
+  "container-title": "Journal of Hydrometeorology",
+  "volume": "20",
+  "page": "1455-1470",
+  "issued": {
+   "date-parts": [
+    [
+     2019
+    ]
+   ]
+  },
+  "author": [
+   {
+    "family": "Hollis",
+    "given": "Daniel"
+   },
+   {
+    "family": "Arendt",
+    "given": "Lena"
+   },
+   {
+    "family": "Mbeki",
+    "given": "Sipho"
+   }
+  ],
+  "DOI": "10.0000/demo.ref1"
+ },
+ {
+  "id": "ref2",
+  "type": "article-journal",
+  "title": "Low-cost precipitation sensing: a review of field deployments",
+  "container-title": "Environmental Monitoring and Assessment",
+  "volume": "193",
+  "page": "612",
+  "issued": {
+   "date-parts": [
+    [
+     2021
+    ]
+   ]
+  },
+  "author": [
+   {
+    "family": "Okafor",
+    "given": "Chidi"
+   },
+   {
+    "family": "Lindqvist",
+    "given": "Erik"
+   }
+  ],
+  "DOI": "10.0000/demo.ref2"
+ },
+ {
+  "id": "ref3",
+  "type": "article-journal",
+  "title": "Impact acoustics of raindrops on tensioned membranes",
+  "container-title": "Measurement Science and Technology",
+  "volume": "29",
+  "page": "085103",
+  "issued": {
+   "date-parts": [
+    [
+     2018
+    ]
+   ]
+  },
+  "author": [
+   {
+    "family": "Vasquez",
+    "given": "Rosa"
+   },
+   {
+    "family": "Ndiaye",
+    "given": "Awa"
+   },
+   {
+    "family": "Petrov",
+    "given": "Ilya"
+   }
+  ],
+  "DOI": "10.0000/demo.ref3"
+ },
+ {
+  "id": "ref4",
+  "type": "article-journal",
+  "title": "Laboratory characterisation of an acoustic disdrometer",
+  "container-title": "Atmospheric Measurement Techniques",
+  "volume": "15",
+  "page": "2201-2216",
+  "issued": {
+   "date-parts": [
+    [
+     2022
+    ]
+   ]
+  },
+  "author": [
+   {
+    "family": "Chen",
+    "given": "Wei"
+   },
+   {
+    "family": "Møller",
+    "given": "Anders"
+   }
+  ],
+  "DOI": "10.0000/demo.ref4"
+ }
+]

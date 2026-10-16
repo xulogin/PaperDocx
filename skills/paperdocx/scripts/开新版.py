@@ -35,14 +35,20 @@ def 主():
     从 = 取参("--从")
     if not 从:
         从 = _项目.当前版(根)
-    到 = 取参("--到") or re.sub(r"\d+", lambda m: str(int(m.group()) + 1), 从, count=1)
+    # ★ 保持原来的位宽：V01 → V02（不是 V2）；V41 → V42
+    到 = 取参("--到") or re.sub(
+        r"\d+", lambda m: str(int(m.group()) + 1).zfill(len(m.group())), 从, count=1)
 
     c = _项目.配置(根)
     对 = []
     for 键 in ("英文版名", "对照版名"):
         源 = 根 / c[键].format(版=从)
         目 = 根 / c[键].format(版=到)
+        # ★ 对照版是**可选**的：只有「作者只读中文、要中英对照」的项目才有。
+        #   纯英文项目没有它，不该报错。
         if not 源.exists():
+            if 键 == "对照版名":
+                continue
             raise SystemExit(f"⛔ 找不到 {源.name}")
         if 目.exists():
             raise SystemExit(f"⛔ {目.name} 已存在，不覆盖。真要重开先自己挪走。")
