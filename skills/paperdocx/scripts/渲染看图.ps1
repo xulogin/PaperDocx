@@ -28,16 +28,23 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
-# ★ 项目根**不许写死层级**。往上找，第一个含 *_排版版.docx 或 *_英文版.md 的目录就是根。
-#   （写死 `parents[2]` 的代价实测过：脚本在 demo/排版/ 下时找到的是 skill 的目录。）
+# ★ 项目根**不许写死层级**，而且要**先从当前工作目录找，再从脚本位置找**。
+#   顺序不能反：skill 装好之后脚本在 ~/.claude/plugins/cache/... 里，
+#   从那儿往上找永远找不到用户的项目（实测报「往上找不到项目根」）。
 $root = $null
-$d = $PSScriptRoot
-while ($d -and -not $root) {
-  if ((Get-ChildItem $d -Filter "*_排版版.docx" -ErrorAction SilentlyContinue) -or
-      (Get-ChildItem $d -Filter "*_英文版.md"  -ErrorAction SilentlyContinue)) { $root = $d }
-  $d = Split-Path -Parent $d
+foreach ($start in @((Get-Location).Path, $PSScriptRoot)) {
+  $d = $start
+  while ($d -and -not $root) {
+    if ((Get-ChildItem $d -Filter "*_排版版.docx" -ErrorAction SilentlyContinue) -or
+        (Get-ChildItem $d -Filter "*_英文版.md"  -ErrorAction SilentlyContinue)) { $root = $d }
+    $d = Split-Path -Parent $d
+  }
+  if ($root) { break }
 }
-if (-not $root) { throw "往上找不到项目根（判据：某层目录里有 *_排版版.docx 或 *_英文版.md）" }
+if (-not $root) {
+  throw "往上找不到项目根（判据：某层目录里有 *_排版版.docx 或 *_英文版.md）。" +
+        "⇒ 在项目目录里跑，或者用 -Docx 给绝对路径。"
+}
 
 if (-not $Docx) {
   $cand = Get-ChildItem $root -Filter "*_排版版.docx" | Sort-Object Name
