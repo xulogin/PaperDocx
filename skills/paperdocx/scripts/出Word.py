@@ -715,10 +715,18 @@ def 插引用(doc, 库: 引用库):
                 项 = [{"id": 库.索引[k]["itemID"], "uris": [库.索引[k]["uri"]],
                       "itemData": 库.条目[k]} for k in 键]
                 # "Yang and Liu (Yang and Liu, 2026)" → Word 里显示 "Yang and Liu (2026)"
-                if (len(键) == 1 and 原[: m.start()].rstrip()
-                        .endswith(Z.author_string(库.条目[键[0]]))):
-                    项[0]["suppress-author"] = True
-                    显 = "(%s)" % Z.year_of(库.条目[键[0]])
+                # ★ 作者名要从**渲染形式**里切（去掉结尾的 ", 年"），不能用
+                #   Z.author_string 现编：消歧过的形式是 "Liu, C. et al., 2023"，
+                #   现编只给 "Liu et al."，`endswith` 对不上，suppress-author
+                #   就不生效，Word 里印成 "Liu, C. et al. (Liu, C. et al., 2023)"。
+                if len(键) == 1:
+                    形 = 库.渲染[键[0]]
+                    作名 = re.sub(r",\s*(?:19|20)\d{2}[a-z]?$", "", 形)
+                    if 原[: m.start()].rstrip().endswith(作名) or \
+                            原[: m.start()].rstrip().endswith(
+                                Z.author_string(库.条目[键[0]])):
+                        项[0]["suppress-author"] = True
+                        显 = "(%s)" % Z.year_of(库.条目[键[0]])
                 锚 = Z.insert_field_after(锚, Z.citation_instr(项, 显), 显, rpr)
                 游 = m.end()
                 n += 1
@@ -767,6 +775,17 @@ def 做无DOI样式(装进Zotero=None):
     源 = 源路.read_text("utf-8")
     空宏 = '<macro name="access"><text value=""/></macro>'
     文, n = re.subn(r'<macro name="access">.*?</macro>', 空宏, 源, flags=re.S)
+    # ★ 刊名缩写：elsevier-harvard 对期刊论文写的是
+    #   `<text variable="container-title" form="short"/>`，citeproc 就去取条目的
+    #   「期刊缩写」字段，印出 "Remote Sens. Environ."。作者稿子里写的是全称，
+    #   **28 条有出入里有一半是这一条造成的**。把 form="short" 去掉就全称了。
+    #   （只改这份派生样式，Zotero 库里的「期刊缩写」字段一个都不动。）
+    if C.文献.get("刊名全称"):
+        文, m = re.subn(r'(<text variable="container-title")\s+form="short"',
+                        r"\1", 文)
+        if m == 0:
+            print("  ⚠ 这个样式里没有 container-title form=\"short\"，"
+                  "刊名全称这一项没起作用")
     if n == 0 and re.search(r'\b(DOI|URL)\b', 源):
         # 有的样式不走 access 宏，直接在 bibliography 里印 DOI
         raise SystemExit(
@@ -804,7 +823,14 @@ def 做无DOI样式(装进Zotero=None):
 
 
 def 插文献(doc, 库: 引用库, 被引, csl):
-    收 = [库.条目[k] for k in 库.条目 if k in 被引 and k not in C.文献["排除"]]
+    # ★ 「正文引到的」不等于「文献表要印的」。只在补充材料里引的条目，作者照样
+    #   放在正文的 References 里 —— 走 排版配置.文献["额外收录"]，不然会被静默丢掉。
+    额外 = set(C.文献.get("额外收录") or ())
+    缺 = sorted(额外 - set(库.条目))
+    if 缺:
+        raise SystemExit(f"⛔ 额外收录里的 {缺} 不在 references.json 里")
+    要 = (set(被引) | 额外) - set(C.文献["排除"])
+    收 = [库.条目[k] for k in 库.条目 if k in 要]
     丢 = sorted(被引 & set(C.文献["排除"]))
     if 丢:
         raise SystemExit(f"⛔ {丢} 被排除，正文里却还引着它。先把正文的引用去掉。")
@@ -1094,7 +1120,9 @@ def 主():
     样式表 = 建样式(doc)
     表字号 = 配正文(doc, 期望, 公式号, 样式表)
     引用数 = 插引用(doc, 库)
-    文献数 = 插文献(doc, 库, 被引, 做无DOI样式())
+    # ★ 以前这里写死 `做无DOI样式()`，排版配置.文献["装进Zotero"] 根本没人读 ——
+    #   配了 True 也不会装进 Zotero，作者一 Refresh DOI 全回来。
+    文献数 = 插文献(doc, 库, 被引, 做无DOI样式(C.文献.get("装进Zotero")))
     红 = None
     对照 = 取参("--标红对照")
     if 对照:

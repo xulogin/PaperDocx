@@ -1,0 +1,110 @@
+# -*- coding: utf-8 -*-
+r"""从 md 到验收过的 docx，**一条命令走完**。
+
+    py -3.12 -X utf8 排版/走一遍.py              # 预览版（图 300 dpi）+ 全部验收
+    py -3.12 -X utf8 排版/走一遍.py --交付        # 预览验收过了，再出一版原图交付稿
+    py -3.12 -X utf8 排版/走一遍.py --跳过文献     # 只改了正文、文献一个没动时
+    py -3.12 -X utf8 排版/走一遍.py --刷新库       # 强制重拉 Zotero 库（平时靠库版本号自动失效）
+
+## 为什么是这个顺序
+
+    配文献 ──→ 做排版源 ──→ 出Word ──→ 渲染看图 ──→ 比文献表
+       │                                              ↑
+       └──────────→ 核DOI（联网，和上面这条路无关）───────┘
+
+**前三步是硬链**：出 Word 要 `引用映射.tsv` 才知道正文里哪一段是引用。
+**核DOI 是另一条路**，65 条要联网问 65 次，和出 docx 互不相干 ——
+所以它一开始就**扔到后台**跑，最后再收结果。
+
+## ★ 慢在哪（2026-10-18 第一次做这篇 65 条的稿子，花了一个多小时）
+
+| 慢的 | 真正的原因 | 现在怎么解决 |
+|---|---|---|
+| 拉 Zotero 库 | 998 条要分 10 次 HTTP | 按**库版本号**缓存，库没改就不重拉 |
+| 出了 4 遍 Word | 每遍都写几十 MB | 默认只出 **300 dpi 预览版**，验收过了再 `--交付` |
+| DOI 核实 65 次 | 串在主路上等 | **扔后台**，和出 docx 同时跑 |
+| 摸 Zotero API 格式来回 3 轮 | 照着印象写代码 | 已经写死在 配文献.py 的注释里，不用再摸 |
+
+★ **并行不是万能的。** 这里真正省时间的是「库缓存」和「少出一遍 Word」，
+  并行只省下 DOI 那一段。别为了并行把硬链拆开。
+"""
+from __future__ import annotations
+
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+这里 = Path(__file__).resolve().parent
+sys.path.insert(0, str(这里))
+import _项目                                            # noqa: E402
+
+根 = _项目.找根()
+_, 版, 英, _对, 排 = _项目.三件套(根)
+PY = [sys.executable, "-X", "utf8"]
+交付 = "--交付" in sys.argv
+
+
+def 跑(名, *参, 必须=True):
+    t0 = time.time()
+    print(f"\n{'='*66}\n▶ {名}  {' '.join(str(x) for x in 参)}\n{'='*66}")
+    r = subprocess.run(PY + [str(这里 / 名)] + [str(x) for x in 参], cwd=str(根))
+    print(f"— {名} 用时 {time.time()-t0:.0f} 秒")
+    if r.returncode and 必须:
+        raise SystemExit(f"⛔ {名} 没过，停在这里。")
+    return r.returncode
+
+
+def 主():
+    总 = time.time()
+
+    # ── 0. 后台：DOI 核实（联网，和主路无关）。文献数据还没生成时跳过
+    后台 = None
+    if (这里 / "引用数据" / "references.json").exists() and "--跳过DOI" not in sys.argv:
+        print("▶ 后台起 核DOI.py（和出 Word 同时跑）")
+        后台 = subprocess.Popen(PY + [str(这里 / "核DOI.py")], cwd=str(根),
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              encoding="utf-8", errors="replace")
+
+    # ── 1-3. 硬链
+    if "--跳过文献" not in sys.argv:
+        跑("配文献.py", "--写", *(["--刷新库"] if "--刷新库" in sys.argv else []))
+    跑("做排版源.py", "--写")
+    源 = f"{版}_排版源.md"
+    预览 = f"_预览_{版}.docx"
+    跑("出Word.py", "--源", 源, "--图dpi", "300", "--出", 预览)
+
+    # ── 4. 真 Word 导 PDF → PNG
+    t0 = time.time()
+    print(f"\n{'='*66}\n▶ 渲染看图.ps1  {预览}\n{'='*66}")
+    r = subprocess.run(["powershell", "-ExecutionPolicy", "Bypass", "-File",
+                        str(这里 / "渲染看图.ps1"), "-Docx", 预览], cwd=str(根))
+    print(f"— 渲染 用时 {time.time()-t0:.0f} 秒")
+    if r.returncode:
+        raise SystemExit("⛔ 渲染没过，停在这里。")
+    pdf = 这里 / "_预览" / (预览.replace(".docx", ".pdf"))
+
+    # ── 5. 验收
+    跑("验docx.py", 预览)
+    跑("比文献表.py", pdf, 必须=False)
+
+    # ── 6. 收后台
+    if 后台:
+        print(f"\n{'='*66}\n▶ 核DOI.py（后台）结果\n{'='*66}")
+        out, _ = 后台.communicate()
+        for l in (out or "").splitlines():
+            if l.startswith(("  ✗", "  ⚠", "DOI 核实", "★")) or "没有 DOI" in l:
+                print(l)
+
+    print(f"\n{'='*66}")
+    if 交付:
+        跑("出Word.py", "--源", 源, "--出", 排.name)
+        print(f"✓ 交付稿 {排.name}（原图未压缩）")
+    else:
+        print(f"✓ 预览版 {预览} 已出并验收。版面没问题再跑一次带 --交付 出原图稿。")
+    print(f"★ 一页页看图：{这里 / '_预览'}")
+    print(f"总用时 {time.time()-总:.0f} 秒")
+
+
+if __name__ == "__main__":
+    主()

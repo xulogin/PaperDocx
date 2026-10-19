@@ -127,9 +127,21 @@ py -3.12 -X utf8 ../scripts/探参考docx.py 那本刊物的稿子.docx --配置
     # ★ 换刊物就是换 `排版/引用数据/` 里那个 .csl（Zotero 数据目录的 styles/ 里有几千个）。
     #   不填 底版CSL 就自动取该目录里唯一一个不带 -nodoi 的 .csl。
     底版CSL=None,            # 例："elsevier-harvard.csl"
+    # ★ 样式名 / 样式ID 要对准**本机 Zotero 里已经装着的那份**无 DOI 样式。
+    #   对不准的话，同一个文件名会被写成另一个 <id>，Zotero 那边认不出来。
     样式名="Journal style (no DOI)",
     样式ID="http://www.zotero.org/styles/paperdocx-nodoi",
     出DOI=False,
+    # ★ 刊名印全称还是缩写。elsevier-harvard 对期刊论文写的是
+    #   `<text variable="container-title" form="short"/>`，citeproc 就去取条目的
+    #   「期刊缩写」字段，印出 "Remote Sens. Environ."。
+    #   作者稿子里通常写全称 —— 2026-10-18 那篇 65 条的稿子，不开这一项有 **17 条**
+    #   因为刊名缩写对不上。开了就把派生样式里的 form="short" 去掉。
+    #   （只改派生样式，Zotero 库里的「期刊缩写」字段一个都不动。）
+    刊名全称=False,
+    # Zotero 数据目录。不填就看环境变量 ZOTERO_DATA_DIR，再不行用 `~/Zotero`。
+    # ★ 很多人把库挪到别的盘了，别假设默认位置。
+    Zotero数据目录=None,
     # 改好的无 DOI 样式要不要装进 Zotero 的 styles/。
     # ★ 不装的话：docx 里预渲染的文献表确实没 DOI，但作者一点 Refresh，
     #   Zotero 会按它自己装着的原样式重排，DOI 全回来了。装完要**重启 Zotero**。
@@ -139,6 +151,14 @@ py -3.12 -X utf8 ../scripts/探参考docx.py 那本刊物的稿子.docx --配置
     # 正文里已经不引、但还留在 references.json 里的条目写这里。
     # 例：某一轮删掉了某处引用之后 ref58 全文 0 处 → 排除=("ref58",)
     排除=(),
+    # ★ 正文没引、但**必须进参考文献表**的条目（只在补充材料里引的那种）。
+    #   插文献() 默认只收正文引到的，不写这一项会**静默少几条**。
+    #   2026-10-18 实测：65 条里有 2 条只在补充材料里引，不写就掉成 63 条。
+    #   ⚠ 它们在 docx 里是**预渲染**进去的；作者在 Word 里点 Refresh 之后
+    #     Zotero 可能把「没人引」的条目丢掉（uncited 名单由 Zotero 自己管，
+    #     这里没法替它填）。要长久保住，让作者在 Zotero 的
+    #     Add/Edit Bibliography 对话框里把这几条加进去。
+    额外收录=(),
 )
 
 # ============================================================ 同步锚点

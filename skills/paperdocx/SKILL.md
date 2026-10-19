@@ -42,7 +42,32 @@ Zotero 活引用 / 不出 DOI 的参考文献 / 附录表 / 页码。
 
 ---
 
-## 三分钟跑起来
+## ★★ 一条命令走完（日常就用这个）
+
+```powershell
+py -3.12 -X utf8 排版/走一遍.py           # 配文献 → 排版源 → 出预览 → 渲染 → 三项验收
+py -3.12 -X utf8 排版/走一遍.py --交付     # 版面没问题了，再出一版原图交付稿
+```
+
+实测（一篇 42 页 / 23 图 / 7 表 / 12 公式 / 65 条文献的稿子，2026-10-19）：
+
+| 步骤 | 用时 |
+|---|---|
+| 配文献（65 条 ↔ 库里 998 条） | 8 s |
+| 做排版源 | 1 s |
+| 出 Word（`--图dpi 300` 预览版） | 20 s |
+| 真 Word 导 PDF + 42 页转 PNG | 24 s |
+| 结构体检 + 文献表逐条比 | 2 s |
+| DOI 核实 65 条 | **0 s（后台，和出 Word 同时跑）** |
+| **合计** | **55 s** |
+
+同一件事第一次做花了一个多小时。省下来的**不是靠并行**，是靠这三条：
+**① Zotero 库按版本号缓存**（库一改自动重拉，不靠人判断）、
+**② 默认只出预览版**（原图版几十 MB，写盘和导 PDF 都慢，验收完再出一次）、
+**③ 把联网的 DOI 核实扔后台**。
+前三步是硬链（出 Word 要 `引用映射.tsv`），别为了并行拆它。
+
+## 三分钟跑起来（想一步步来的话）
 
 ```powershell
 # 1) 建工作区（把 scripts/ 整个拷到你的项目里）
@@ -238,13 +263,28 @@ ISPRS 那份**整表每格 `jc=center` + `vAlign=center`**，紧凑得多。
 正文里的引用是**真的 Zotero 复杂字段**（`ADDIN ZOTERO_ITEM CSL_CITATION`），不是死文本；
 参考文献表是 Zotero 书目字段。作者在 Word 里点 Refresh 就能重排、换样式。
 
-需要三样东西（都能从 Zotero 导出，见 `references/zotero接法.md`）：
+需要三样东西（见 `references/zotero接法.md`）：
 
 ```
-references.json        63 条 CSL-JSON（Zotero 导出 → CSL JSON）
+references.json        CSL-JSON，id 换成 ref1..refN
 zot_match_index.json   {refN: {itemKey, itemID, uri}}  ← Refresh 靠 uri 命中，不弹选择框
+引用映射.tsv            refN ↔ 正文里**实际写的**渲染形式
 xxx.csl                引用样式
 ```
+
+### ★ 这四样不用手动做 —— `配文献.py` 自动配
+
+```powershell
+py -3.12 -X utf8 排版/配文献.py        # 先只看报告
+py -3.12 -X utf8 排版/配文献.py --写    # 确认无误再写
+```
+
+它拿稿子 `## References` 里的纯文本条目，按**题名 + 第一作者姓 + 年份**去
+Zotero 本地 API 配，配上了就吐出上面四个文件，配不上的写进 `引用数据/未命中.md`
+（拿去 LitDoc 下载入库）。2026-10-18 实测：一篇 65 条的稿子，65 条全配上，
+零歧义，比手动「导出 CSL JSON + 按题名回查 itemID」快得多。
+
+**要 Zotero 开着**（本地 API 在 `127.0.0.1:23119`）。
 
 **不出 DOI** 的做法：把 CSL 的 `access` 宏掏空就行，**Zotero 库里的 DOI 一个都不用删**。
 
@@ -264,6 +304,20 @@ xxx.csl                引用样式
 
 > ★ `docProps/custom.xml` 里的 `ZOTERO_PREF_1` 是 Zotero 认领这份文档的凭据。
 > python-docx 存盘后它不一定还在，**每次写完都无脑补一遍**（幂等）。
+
+### ★★ 2026-10-18 配一篇 65 条的稿子，踩到的六件事
+
+| 坑 | 现象 | 绕法 |
+|---|---|---|
+| **CSL-JSON 的 `id` 不一定是条目 URI** | 条目 Extra 里写了 `Citation Key: Lipman:2023hef`（Better BibTeX 的习惯）时，Zotero 拿 citekey 当 `id`。从 `id` 反推 itemKey 会得到一个查不到 itemID 的假键，Refresh 命中不了 | 走 `items/top?format=json&include=csljson`，itemKey 从 `key` 字段拿。★ `include=csljson` 给的是 **JSON 字符串**，里面还是**单元素数组**，两层都要脱 |
+| **题名规约把非 ASCII 删光** | `[^a-z0-9]+` 把中文题名《基于图像序列的树木枝干L系统建模方法研究》压成 `"l"`，于是「子串匹配」对任何含 l 的英文题名都成立，一条中文笔记能和正经文献撞成同分，报「★歧义 1.00/1.00」 | 留住 CJK；**规约后短于 14 字符的题名不许走子串匹配**，只许走整体相似度 |
+| **刊名印成缩写** | `elsevier-harvard` 对期刊论文写 `container-title form="short"`，citeproc 去取条目的「期刊缩写」，印出 `Remote Sens. Environ.`；作者稿子里是全称。**65 条里 17 条因此对不上** | `排版配置.文献["刊名全称"]=True`，派生样式里把 `form="short"` 去掉。Zotero 的字段不动 |
+| **叙述式引用出来是死文本** | 稿子里 `Yang and Liu (2026)` 的括号里只有年份，引用正则认的是 `(作者, 年)` 整个括号，匹配不上 → Word 里是一段死字，Refresh 不动它 | 用 `做排版源.py` 改写成 `Yang and Liu (Yang and Liu, 2026)`，`插引用` 看出「前面已经写了作者」就给字段加 `suppress-author`，显示回 `Yang and Liu (2026)` |
+| **suppress-author 用现编的作者名去比** | 原来拿 `Z.author_string` 现编的 `Liu et al.` 和前文比，消歧过的 `Liu, C. et al.` 对不上 → 印成 `Liu, C. et al. (Liu, C. et al., 2023)` | 从**渲染形式**里切掉结尾的 `, 年` 当作者名 |
+| **只在补充材料里引的条目被静默丢掉** | `插文献` 只收正文引到的，文献表从 65 条掉到 63 条，不报错 | `排版配置.文献["额外收录"]=("ref13","ref22")` |
+
+另外：`排版配置.文献["装进Zotero"]` **以前根本没人读**（`主()` 里写死
+`做无DOI样式()`），配了 True 也不装，作者一 Refresh DOI 全回来。已修。
 
 ---
 
@@ -369,19 +423,31 @@ py -3.12 -X utf8 排版/出Word.py --标红对照 上一版_英文版.md
   C_英文稿V42_排版版.docx         产物
   figures/                      图
   排版/
+    走一遍.py                   ★★ 一条命令走完（日常入口）
     排版配置.py                  ★ 参数唯一来源
     块模型.py                    块解析 + 同步串
     出Word.py                   ★ md → docx
+    配文献.py                    ★ 稿件文献表 ↔ Zotero，自动配出引用数据
+    做排版源.py                   文献表换占位块 + 叙述式引用改写
     docx读写.py                  只读写文字，不碰样式
     三方同步.py                  md ↔ docx 联动
     对比版本.py                  两版对比体检
     开新版.py                    V(N) → V(N+1)
     渲染看图.ps1                 真 Word 导 PDF + 转 PNG
+    验docx.py                    交付前结构体检
+    比文献表.py                   印出来的文献 vs 稿子里写的，逐条比
+    核DOI.py                     DOI 去 Crossref / doi.org 核实
     引用数据/
-      references.json
+      references.json           ← 这四个都是 配文献.py 生成的
       zot_match_index.json
+      引用映射.tsv
+      _库缓存.json               Zotero 库快照，按库版本号失效
       xxx.csl
 ```
+
+> 换一套文件名（不是默认的 `C_英文稿V<N>_英文版.md`）：在项目根放一个
+> `稿件配置.py`，写 `英文版名 = "{版}_英文版.md"`、`版正则 = r"(V\d+)_英文版\.md"`、
+> `通配 = "V*_英文版.md"` 就行，脚本一个都不用改。
 
 ---
 
@@ -399,8 +465,22 @@ py -3.12 -X utf8 排版/出Word.py --标红对照 上一版_英文版.md
 ## 验收（★ 不许跳）
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File 排版\渲染看图.ps1
+py -3.12 -X utf8 排版/验docx.py                      # ① 结构体检（字段 / 书签 / 主题字 / 文献条数）
+powershell -ExecutionPolicy Bypass -File 排版\渲染看图.ps1   # ② 真 Word 导 PDF → PNG
+py -3.12 -X utf8 排版/比文献表.py 排版/_预览/xxx.pdf   # ③ 印出来的文献 vs 稿子里写的，逐条比
+py -3.12 -X utf8 排版/核DOI.py                       # ④ DOI 去 Crossref / doi.org 核实
 ```
+
+★ **③ 这一步是新加的，别省。** 出 Word 不报错只说明字段拼对了，不说明印出来的
+那一行和作者写的是同一条 —— 刊名缩写、条目类型（preprint 印成 `(Preprint)`）、
+页码换成文章号、人名缩写多一个字母，都只有逐条比才看得见。
+★ 比的时候**先小写配对，配上之后必须再按原样比一次大小写**：
+Zotero 里 Bonan 2008 的刊名存成小写 `science`，压成小写和稿子一模一样，
+报「逐字相同」，印出来却是小写的 `science`。
+
+★ **Crossref 404 ≠ DOI 是编的。** CNKI（10.13287 / 10.13466）、Eurographics
+（10.2312）、J-Stage（10.18960）、arXiv（10.48550）分别挂在 JaLC / DataCite 下，
+Crossref 查不到。`核DOI.py` 会退到 `doi.org` 内容协商再问一次。
 
 **「跑通」≠「对」。** 脚本不报错只证明 XML 合法。必须真渲染成图，一页页看：
 
