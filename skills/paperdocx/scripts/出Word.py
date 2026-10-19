@@ -84,12 +84,15 @@ class 引用库:
         self.条目 = {r["id"]: r for r in json.loads((d / "references.json").read_text("utf-8"))}
         self.索引 = json.loads((d / "zot_match_index.json").read_text("utf-8"))
         self.渲染 = {}
-        映 = next((p for p in (根 / "引用映射.tsv",
-                             根 / "_工作区/引用映射.tsv",
-                             这里 / "引用数据/引用映射.tsv") if p.exists()), None)
+        # ★ 和 references.json 一样走 找引用数据()，别再单独写一串候选路径 ——
+        #   脚本装进插件缓存之后，`这里/引用数据` 根本不是项目的那一份。
+        映 = next((p for p in (d / "引用映射.tsv",
+                             根 / "引用映射.tsv",
+                             根 / "_工作区/引用映射.tsv") if p.exists()), None)
         if 映 is None:
-            raise SystemExit("⛔ 找不到 引用映射.tsv（refN ↔ 渲染引用）。"
-                             "放在项目根、_工作区/ 或 排版/引用数据/ 任一处")
+            raise SystemExit(f"⛔ 找不到 引用映射.tsv（refN ↔ 渲染引用）。"
+                             f"找过 {d}、项目根、_工作区/。"
+                             f"跑 `配文献.py --写` 会生成它。")
         for line in 映.read_text("utf-8").splitlines()[1:]:
             ref, 文 = line.split("\t")
             self.渲染[ref] = 文
@@ -148,13 +151,14 @@ def 造pandoc输入(块们, 库: 引用库):
             #     **Table 1. 正文**                 整句粗（V39/V40 的稿子）
             #     **Table A2. 一句话.** 后面还有正文   粗到某处为止
             # 判据只要两条：开头是 `**Table N.`，后面有配对的 `**`。
-            if not re.match(r"^\*\*Table [0-9A]+\.", b.文本):
+            # 编号同 块模型.图表号：1 / A2 / S1 都算（补充材料是 S 开头）
+            if not M.图表号.match(b.文本):
                 raise SystemExit(
                     f"⛔ 表题要以 `**Table N.` 开头（块 {b.序}）：{b.文本[:80]}")
             if b.文本.count("**") < 2:
                 raise SystemExit(
                     f"⛔ 表题的 `**` 没闭合（块 {b.序}）：{b.文本[:80]}")
-            if not re.match(r"^\*\*Table [0-9A]+\.\*\* ", b.文本):
+            if not re.match(r"^\*\*(?:Table) [A-Za-z]?\d+[a-z]?\.\*\* ", b.文本):
                 整句粗表题.append(b.序)
             段.append(库.打标记(b.文本))
             期望.append((b, "p", 1))
@@ -810,10 +814,10 @@ def 做无DOI样式(装进Zotero=None):
     出.write_text(文, encoding="utf-8")
 
     if 装进Zotero:
-        import os
-        # Zotero 数据目录：环境变量 ZOTERO_DATA_DIR 优先，否则默认位置。
-        #   （很多人把库挪到别的盘了，所以别写死。）
-        数据 = Path(os.environ.get("ZOTERO_DATA_DIR") or Path.home() / "Zotero")
+        # ★ 数据目录统一走 `_项目.Zotero数据目录()`（配置 > 环境变量 > ~/Zotero）。
+        #   这儿原来自己写了一套，只看环境变量和 ~/Zotero，结果把样式装进了
+        #   一个 2022 年废弃的 profile，不报错、也不生效。
+        数据 = _项目.Zotero数据目录()
         # ★ 文件名跟着源样式走，**不许写死**。
         #   写死的代价实测过：跑 demo 时把真实项目那份 elsevier-harvard-nodoi.csl
         #   覆盖成了 demo 的内容。
@@ -1128,9 +1132,14 @@ def 主():
     样式表 = 建样式(doc)
     表字号 = 配正文(doc, 期望, 公式号, 样式表)
     引用数 = 插引用(doc, 库)
+    # ★ 没有文献占位块就不插文献表 —— **补充材料**就是这种：正文照样有引用
+    #   （要变成 Zotero 活字段），但参考文献表在正文稿里，自己这边没有。
+    #   以前无条件插，补充材料直接报「没找到文献占位符 ZOTEROBIBPLACEHOLDER」出不来。
+    有文献表 = any(b.类型 == "bibph" for b in 块们)
     # ★ 以前这里写死 `做无DOI样式()`，排版配置.文献["装进Zotero"] 根本没人读 ——
     #   配了 True 也不会装进 Zotero，作者一 Refresh DOI 全回来。
-    文献数 = 插文献(doc, 库, 被引, 做无DOI样式(C.文献.get("装进Zotero")))
+    文献数 = (插文献(doc, 库, 被引, 做无DOI样式(C.文献.get("装进Zotero")))
+            if 有文献表 else 0)
     红 = None
     对照 = 取参("--标红对照")
     if 对照:
@@ -1149,7 +1158,8 @@ def 主():
         print("  图用原图，未压缩")
     print(f"  md 块 {len(块们)}：{dict(Counter(b.类型 for b in 块们))}")
     print(f"  活引用字段 {引用数} 处 / 文献 {文献数} 条（被引 {len(被引)}，"
-          f"排除 {','.join(C.文献['排除'])}）")
+          f"排除 {','.join(C.文献['排除'])}）"
+          + ("" if 有文献表 else "  ← 这份稿子没有文献占位块，没插文献表"))
     print(f"  公式 {len(公式号)} / 表 {len(表字号)} / 图 {sum(1 for b in 块们 if b.类型=='image')}")
     if 缩:
         print(f"  为放下而缩了字号的表（块序:字号）：{缩}")

@@ -42,6 +42,15 @@ CJK = re.compile(r"[一-鿿㐀-䶿豈-﫿぀-ヿ]")
 译文标记 = "**中文译文：**"
 
 
+# 图注 / 表题的开头。编号允许带一个字母前缀：
+#   1 / 2a          正文
+#   A1 / A2         附录
+#   S1 / S6         ★ 补充材料 —— 原来写的是 `[0-9A]+`，`Table S1.` 匹配不上，
+#                   整篇补充材料的 7 个图表题全被当成普通正文段：字号 11 pt
+#                   而不是 9.5 pt，表题也不再跟着表走。2026-10-19 实测。
+图表号 = re.compile(r"^\*\*(?:Figure|Table) [A-Za-z]?\d+[a-z]?\.")
+
+
 def 是文献占位(文本: str) -> bool:
     r"""这一块是不是「参考文献表由 Zotero 生成」的占位块。
 
@@ -95,10 +104,8 @@ def 认类型(块行) -> str:
         return "affil"
     if 首.startswith("**Correspondence:**"):
         return "corresp"
-    if re.match(r"^\*\*Figure [0-9A]+\.", 首):
-        return "figcap"
-    if re.match(r"^\*\*Table [0-9A]+\.", 首):
-        return "tabcap"
+    if 图表号.match(首):
+        return "figcap" if 首.startswith("**Figure") else "tabcap"
     if 首.startswith("Note:"):
         return "tabnote"
     if 是文献占位("\n".join(块行)):

@@ -85,6 +85,28 @@ def 当前版(根: Path, c: dict | None = None) -> str:
     return m.group(1)
 
 
+def Zotero数据目录() -> Path:
+    r"""Zotero 的数据目录。**只许有这一份解析逻辑。**
+
+    优先级：`排版配置.文献["Zotero数据目录"]` > 环境变量 `ZOTERO_DATA_DIR` > `~/Zotero`。
+
+    ★ 2026-10-19 实测教训：`做无DOI样式` 自己写了一套（只看环境变量和 `~/Zotero`），
+      于是把改好的样式装进了 `C:\Users\<me>\Zotero\styles\` —— 那是 2022 年
+      留下的**废弃 profile**，活的库在别的盘。装完一点报错都没有，
+      作者在 Word 里 Refresh 还是用旧样式，现象是「改了等于没改」。
+    """
+    import os
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    配 = None
+    try:
+        import 排版配置
+        配 = 排版配置.文献.get("Zotero数据目录")
+    except Exception:
+        pass
+    return Path(配 or os.environ.get("ZOTERO_DATA_DIR") or Path.home() / "Zotero")
+
+
 def 找引用数据(根=None, 这里=None) -> Path:
     r"""`引用数据/`（references.json / zot_match_index.json / 引用映射.tsv / .csl）在哪。
 

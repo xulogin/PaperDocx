@@ -41,20 +41,48 @@ import 排版配置 as C                                     # noqa: E402
 
 根 = _项目.找根()
 英文版 = _项目.三件套(根)[2]
-出目 = 这里 / "引用数据"
+
+
+def _出目():
+    r"""引用数据写到哪。★ **不能写死 `这里/引用数据`** —— skill 装好之后 `这里`
+    是插件缓存，所有项目共用；写进去的话，换个脚本位置就找不着，
+    库缓存也形同虚设（2026-10-19 实测：缓存写进了 skill 源码目录，
+    从插件跑时「没有库缓存可用」）。
+    已经有的就用已经有的；没有就在项目里建一个。"""
+    try:
+        d = _项目.找引用数据(根, 这里)
+        if 这里 not in d.parents:          # 别把插件自带的 demo 数据当成本项目的
+            return d
+    except SystemExit:
+        pass
+    for 候选 in (根 / "排版", 根 / "_工作区" / "排版"):
+        if 候选.is_dir():
+            return 候选 / "引用数据"
+    return 根 / "引用数据"
+
+
+出目 = _出目()
 API = "http://127.0.0.1:23119/api/users/0"
 开 = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
 # ───────────────────────────────── Zotero 侧
-def 库版本() -> str:
-    r"""Zotero 本地库的版本号（`Last-Modified-Version` 响应头）。
+def 库版本():
+    r"""Zotero 本地库的版本号（`Last-Modified-Version` 响应头）。连不上返回 None。
 
     库里**任何**改动都会把它顶上去，所以拿它当缓存的失效判据，
     比「我觉得文献没改」靠谱 —— 文献是会一直改的。
+
+    ★ 连不上**不抛 traceback**。Zotero 没开时 urllib 报
+      `WinError 10061 由于目标计算机积极拒绝`，一屏栈，看着像代码坏了；
+      而且本机有 HTTP_PROXY，走代理连 127.0.0.1 会返回 502，
+      现象和「没开」一模一样（所以上面用了 ProxyHandler({})）。
     """
-    r = 开.open(f"{API}/items/top?format=json&limit=1", timeout=30)
-    return r.headers.get("Last-Modified-Version") or ""
+    try:
+        r = 开.open(f"{API}/items/top?format=json&limit=1", timeout=30)
+        return r.headers.get("Last-Modified-Version") or ""
+    except Exception:
+        return None
 
 
 def 取库条目(强制=False):
@@ -73,14 +101,27 @@ def 取库条目(强制=False):
     """
     缓存 = 出目 / "_库缓存.json"
     版 = 库版本()
-    if not 强制 and 缓存.exists():
+    旧 = None
+    if 缓存.exists():
         try:
-            d = json.loads(缓存.read_text("utf-8"))
-            if d.get("库版本") == 版 and d.get("条目"):
-                print(f"  库缓存命中（库版本 {版}，{len(d['条目'])} 条，没重拉）")
-                return d["条目"]
-        except (ValueError, KeyError):
-            pass
+            旧 = json.loads(缓存.read_text("utf-8"))
+        except ValueError:
+            旧 = None
+    if 版 is None:
+        # Zotero 没开 / 连不上。有缓存就先用缓存把这一版排出来，别把人卡死在这。
+        if 旧 and 旧.get("条目"):
+            print("  ⚠ 连不上 Zotero（没开？），**用上一次的库缓存**接着跑。\n"
+                  f"    缓存里 {len(旧['条目'])} 条，库版本 {旧.get('库版本')}。"
+                  "文献有改动的话结果会是旧的 —— 开着 Zotero 再跑一次才算数。")
+            return 旧["条目"]
+        raise SystemExit(
+            "⛔ 连不上 Zotero 本地 API（127.0.0.1:23119），而且没有库缓存可用。\n"
+            "   ① 先把 Zotero 打开（设置里要勾上「允许其他应用与 Zotero 通信」）\n"
+            "   ② 本机有 HTTP_PROXY，脚本已经用 ProxyHandler({}) 绕开了；\n"
+            "      如果你自己写探针，不绕代理会拿到 502，看着和「没开」一模一样")
+    if not 强制 and 旧 and 旧.get("库版本") == 版 and 旧.get("条目"):
+        print(f"  库缓存命中（库版本 {版}，{len(旧['条目'])} 条，没重拉）")
+        return 旧["条目"]
     出, 起 = [], 0
     while True:
         u = f"{API}/items/top?format=json&include=csljson&limit=100&start={起}"
@@ -113,9 +154,7 @@ def 取itemID():
     数据目录：排版配置.文献['Zotero数据目录'] > 环境变量 ZOTERO_DATA_DIR > `~/Zotero`。
     ★ 很多人把库挪到别的盘了（本机在 F:\\Zotero_storage），别写死默认位置。
     """
-    库 = Path(C.文献.get("Zotero数据目录")
-             or os.environ.get("ZOTERO_DATA_DIR")
-             or Path.home() / "Zotero") / "zotero.sqlite"
+    库 = _项目.Zotero数据目录() / "zotero.sqlite"
     if not 库.exists():
         raise SystemExit(f"⛔ 找不到 {库}；用 ZOTERO_DATA_DIR 指一下数据目录")
     临 = Path(tempfile.mkdtemp(prefix="zotsnap_")) / "zotero.sqlite"

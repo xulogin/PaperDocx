@@ -163,3 +163,33 @@ py -3.12 -X utf8 ../scripts/探参考docx.py 那本刊物的稿子.docx --配置
 
 # ============================================================ 同步锚点
 锚点前缀 = "PDX"            # 书签名 PDX0001、PDX0002……，三方同步靠它定位
+
+
+# ============================================================ ★ 项目级覆盖
+# skill 装好之后，`scripts/` 在插件缓存里、**所有项目共用一份**。
+# 直接跑 `<插件>/scripts/出Word.py` 时，这个文件里的值就是全部 —— 项目自己
+# 那份 `排版/排版配置.py` 根本没人读。2026-10-19 实测：补充材料出出来，
+# 样式 ID 是默认的 `paperdocx-nodoi` 而不是项目配的 `elsevier-harvard-nodoi`，
+# 不看体检输出根本发现不了。
+#
+# ⇒ 导入时找一遍项目里的同名文件，找到就**在本模块的名字空间里 exec 一遍**，
+#   项目写了哪几项就覆盖哪几项，没写的继续用上面的默认值。
+def _吃项目配置():
+    import sys
+    from pathlib import Path
+    这里 = Path(__file__).resolve()
+    sys.path.insert(0, str(这里.parent))
+    try:
+        import _项目
+        根 = _项目.找根()
+    except SystemExit:
+        return None
+    for p in (根 / "排版配置.py", 根 / "排版" / "排版配置.py",
+              根 / "_工作区" / "排版" / "排版配置.py"):
+        if p.exists() and p.resolve() != 这里:
+            exec(compile(p.read_text("utf-8"), str(p), "exec"), globals())
+            return p
+    return None
+
+
+项目配置 = _吃项目配置()
