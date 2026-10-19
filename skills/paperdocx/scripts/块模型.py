@@ -42,6 +42,23 @@ CJK = re.compile(r"[一-鿿㐀-䶿豈-﫿぀-ヿ]")
 译文标记 = "**中文译文：**"
 
 
+def 是文献占位(文本: str) -> bool:
+    r"""这一块是不是「参考文献表由 Zotero 生成」的占位块。
+
+    ★ 别按一句固定的话去认。2026-10-19 实测：同一个项目里
+      V39/V40 写的是 `(63 entries; inserted by Zotero in the Word build)`，
+      V41/V42 写的是 `(Reference list is inserted here by Zotero when the Word file is built.)`。
+      原来写死 `startswith("(Reference list is inserted")`，拿 V39 一排就把它当成正文段，
+      最后 `插文献` 报「没找到文献占位符」—— 错在最后一步，根因在第一步，很难看出来。
+    ⇒ 判据放宽成：**整块是一个单行括号句**，里面既说了 insert，
+      又点到 Zotero / reference / bibliography 之一。
+    """
+    s = 文本.strip()
+    return (s.startswith("(") and s.endswith(")") and "\n" not in s
+            and re.search(r"insert", s, re.I) is not None
+            and re.search(r"zotero|reference|bibliograph", s, re.I) is not None)
+
+
 # ============================================================ 切块
 def 切块(正文: str):
     """按空行切块，返回 list[list[str]]（每块是若干行）。"""
@@ -84,7 +101,7 @@ def 认类型(块行) -> str:
         return "tabcap"
     if 首.startswith("Note:"):
         return "tabnote"
-    if 首.startswith("(Reference list is inserted"):
+    if 是文献占位("\n".join(块行)):
         # 参考文献占位块：出 Word 时整段被 Zotero 书目字段顶替掉，
         # 所以它在 docx 里没有对应段落，不参与三方同步。
         return "bibph"

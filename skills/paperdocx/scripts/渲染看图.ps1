@@ -54,7 +54,11 @@ if (-not $Docx) {
 else { $src = Join-Path $root $Docx }
 if (-not (Test-Path $src)) { throw "找不到 $src" }
 
-if (-not $Out) { $Out = Join-Path $PSScriptRoot "_预览" }
+# ★ 预览图必须落在**项目自己的目录**里，不能落在脚本目录。
+#   skill 装好之后脚本在插件缓存里，所有项目共用一份 —— 2026-10-19 实测：
+#   先渲染 demo，再渲染另一个项目，两边的 p001.png 互相覆盖，
+#   连 PDF 都混在一个文件夹里，看图时拿错了文件还不自知。
+if (-not $Out) { $Out = Join-Path $root "_预览" }
 $outDir = if ([System.IO.Path]::IsPathRooted($Out)) { $Out } else { Join-Path $root $Out }
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $pdf = Join-Path $outDir ([System.IO.Path]::GetFileNameWithoutExtension($src) + ".pdf")
