@@ -451,6 +451,35 @@ py -3.12 -X utf8 排版/出Word.py --标红对照 上一版_英文版.md
 
 ---
 
+## ★ 现成预设：Elsevier 系（RSE / ISPRS），2026-10-18 实做过一篇 65 条文献的稿子
+
+`排版配置.py` 里这么填（默认值是通用的，这几项要按刊物改）：
+
+```python
+文献 = dict(
+    底版CSL="elsevier-harvard.csl",                       # Zotero styles/ 里拷进 引用数据/
+    样式名="Elsevier Harvard (no DOI)",                    # ★ 对准本机 Zotero 里已装的那份
+    样式ID="http://www.zotero.org/styles/elsevier-harvard-nodoi",
+    出DOI=False,
+    刊名全称=True,          # ★ 不开的话 65 条里 17 条因为刊名缩写对不上
+    额外收录=("ref13", "ref22"),   # 只在补充材料里引、但要进文献表的
+    Zotero数据目录=r"F:\Zotero_storage",   # 库挪过盘就写死，别靠默认位置
+)
+```
+
+稿件文件名不是默认的 `C_英文稿V<N>_英文版.md`？在项目根放个 `稿件配置.py`：
+
+```python
+英文版名 = "{版}_英文版.md"
+对照版名 = "{版}_中英文对照版.md"
+排版版名 = "{版}_排版版.docx"
+版正则   = r"(V\d+)_英文版\.md"
+通配     = "V*_英文版.md"
+```
+
+> ★ 作者手写的稿子（`## References` 底下是纯文本条目）和 PaperDocx 原生格式
+> （文献表是 Zotero 占位块）**走的路不一样**，`走一遍.py` 自己认，不用管。
+
 ## 换一本刊物怎么改
 
 1. **页面字号** → 改 `排版配置.py` 的 `页边距` / `样式`，一个文件搞定
