@@ -85,6 +85,27 @@ def 当前版(根: Path, c: dict | None = None) -> str:
     return m.group(1)
 
 
+def 找引用数据(根=None, 这里=None) -> Path:
+    r"""`引用数据/`（references.json / zot_match_index.json / 引用映射.tsv / .csl）在哪。
+
+    ★ 为什么要找好几处：skill 装好之后 `scripts/` 在插件缓存里（只读、所有项目共用），
+      而引用数据是**每个项目各自的**，只能放项目里。写死 `这里/引用数据` 的话，
+      直接跑 `<插件>/scripts/xxx.py` 就找不到。
+    ★ 2026-10-19 实测：验docx.py 就是写死了 `这里/引用数据`，从插件安装位置跑
+      demo 直接 FileNotFoundError。所以这个查找只许有**一份实现**，放这儿。
+    """
+    根 = Path(根) if 根 else 找根()
+    这里 = Path(这里) if 这里 else Path(__file__).resolve().parent
+    for d in (根 / "引用数据", 根 / "排版" / "引用数据",
+              根 / "_工作区" / "排版" / "引用数据", 这里 / "引用数据"):
+        if d.is_dir() and any(d.glob("*.json")):
+            return d
+    raise SystemExit(
+        "⛔ 找不到 `引用数据/`（要有 references.json 和 zot_match_index.json）。\n"
+        f"   找过：{根}/引用数据、{根}/排版/引用数据、{这里}/引用数据\n"
+        "   ⇒ 先跑 `配文献.py --写` 生成，或见 references/zotero接法.md")
+
+
 def 三件套(根=None, 版=None):
     """-> (根, 版, 英文版路径, 对照版路径, 排版版路径)"""
     根 = Path(根) if 根 else 找根()

@@ -131,6 +131,12 @@ def 取itemID():
 # ───────────────────────────────── 稿件侧
 def 读文献表():
     md = 英文版.read_text("utf-8")
+    if "(Reference list is inserted" in md:
+        raise SystemExit(
+            f"⛔ {英文版.name} 已经是 PaperDocx 原生格式了 —— 文献表是 Zotero 占位块，\n"
+            "   不是纯文本条目，没什么可配的。直接出 Word 就行：\n"
+            "     py -3.12 -X utf8 排版/出Word.py\n"
+            "   （`走一遍.py` 会自己认出这种格式并跳过这一步。）")
     _, _, 尾 = md.partition("\n## References\n")
     出 = []
     for s in (l.strip() for l in 尾.split("\n")):

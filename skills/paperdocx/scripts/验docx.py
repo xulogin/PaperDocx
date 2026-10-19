@@ -41,7 +41,8 @@ if len(书目) != 1:
     坏.append(f"书目字段应该正好 1 个，现在 {len(书目)} 个")
 
 # 2. 每个字段的 uris 都要在 zot_match_index 里
-索引 = json.loads((这里 / "引用数据" / "zot_match_index.json").read_text("utf-8"))
+引用数据 = _项目.找引用数据(根, 这里)
+索引 = json.loads((引用数据 / "zot_match_index.json").read_text("utf-8"))
 合法 = {v["uri"] for v in 索引.values()}
 用到 = set(re.findall(r"http://zotero\.org/users/[^\"\\]+/items/\w+", doc))
 野 = 用到 - 合法

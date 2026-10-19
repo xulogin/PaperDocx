@@ -74,20 +74,8 @@ DRAW = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 
 # ══════════════════════════════════════════════════ 引用
 def 找引用数据() -> Path:
-    r"""`引用数据/` 可以放在脚本旁边，也可以放在项目根。
-
-    ★ 为什么要两处都找：skill 装好之后，`scripts/` 在插件缓存里（只读、所有项目共用），
-      而 `references.json` / `.csl` 是**每个项目各自的**，只能放项目里。
-      写死 `这里 / "引用数据"` 的话，直接跑 `<插件>/scripts/出Word.py` 就找不到。
-    """
-    for d in (根 / "引用数据", 根 / "排版" / "引用数据",
-              根 / "_工作区" / "排版" / "引用数据", 这里 / "引用数据"):
-        if d.is_dir() and any(d.glob("*.json")):
-            return d
-    raise SystemExit(
-        "⛔ 找不到 `引用数据/`（要有 references.json 和 zot_match_index.json）。\n"
-        f"   找过：{根}/引用数据、{根}/排版/引用数据、{这里}/引用数据\n"
-        "   怎么准备见 references/zotero接法.md")
+    """实现在 `_项目.找引用数据`（只许有一份，别在各脚本里各写一遍）。"""
+    return _项目.找引用数据(根, 这里)
 
 
 class 引用库:

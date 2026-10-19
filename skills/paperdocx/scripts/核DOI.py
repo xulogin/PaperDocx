@@ -18,8 +18,13 @@ import urllib.request
 from pathlib import Path
 
 这里 = Path(__file__).resolve().parent
-引 = json.loads((这里 / "引用数据" / "references.json").read_text("utf-8"))
-归 = json.loads((这里 / "引用数据" / "条目归属.json").read_text("utf-8"))
+sys.path.insert(0, str(这里))
+import _项目                                            # noqa: E402
+
+引用数据 = _项目.找引用数据(这里=这里)
+引 = json.loads((引用数据 / "references.json").read_text("utf-8"))
+归表 = 引用数据 / "条目归属.json"
+归 = json.loads(归表.read_text("utf-8")) if 归表.exists() else {}
 UA = "PaperDocx/1.0 (mailto:hifengxu@gmail.com)"
 
 

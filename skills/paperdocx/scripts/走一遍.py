@@ -44,6 +44,17 @@ _, 版, 英, _对, 排 = _项目.三件套(根)
 PY = [sys.executable, "-X", "utf8"]
 交付 = "--交付" in sys.argv
 
+# ★ 两种 md，走的路不一样（2026-10-19 从插件安装位置跑 demo 才发现：
+#   原来一律先跑 配文献.py，撞上 demo 的占位块就报「认不出年份」）：
+#
+#   原生格式：文献表已经是 `(Reference list is inserted …)` 占位块，
+#            引用数据/ 也已经备好（demo、以及上一轮已经配过的稿子）
+#            → 配文献 / 做排版源 都不用跑，md 自己就是排版源
+#
+#   作者手写：`## References` 底下 65 条纯文本
+#            → 先配文献，再派生出 <版>_排版源.md
+原生 = "(Reference list is inserted" in 英.read_text("utf-8")
+
 
 def 跑(名, *参, 必须=True):
     t0 = time.time()
@@ -67,10 +78,15 @@ def 主():
                               encoding="utf-8", errors="replace")
 
     # ── 1-3. 硬链
-    if "--跳过文献" not in sys.argv:
-        跑("配文献.py", "--写", *(["--刷新库"] if "--刷新库" in sys.argv else []))
-    跑("做排版源.py", "--写")
-    源 = f"{版}_排版源.md"
+    if 原生:
+        print(f"\n▶ {英.name} 已经是 PaperDocx 原生格式（文献表是 Zotero 占位块），"
+              f"\n  配文献 / 做排版源 都跳过，直接拿它出 Word。")
+        源 = 英.name
+    else:
+        if "--跳过文献" not in sys.argv:
+            跑("配文献.py", "--写", *(["--刷新库"] if "--刷新库" in sys.argv else []))
+        跑("做排版源.py", "--写")
+        源 = f"{版}_排版源.md"
     预览 = f"_预览_{版}.docx"
     跑("出Word.py", "--源", 源, "--图dpi", "300", "--出", 预览)
 
@@ -86,7 +102,8 @@ def 主():
 
     # ── 5. 验收
     跑("验docx.py", 预览)
-    跑("比文献表.py", pdf, 必须=False)
+    if not 原生:          # 原生格式的 md 里没有纯文本文献表，没得比
+        跑("比文献表.py", pdf, 必须=False)
 
     # ── 6. 收后台
     if 后台:
