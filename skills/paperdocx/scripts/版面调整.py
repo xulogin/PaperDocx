@@ -12,6 +12,7 @@ r"""图表往后挪一段，让页面尽量填满（Word 不会自己浮动图�
 
 只换图表位置，不改任何文字。挪前备份 md 到 _预览/版面调整前_<时间>.md，每一步写进 _预览/版面调整.log。
 ★ 不跨 `## ` 一级章节（图跑进别的章节读者找不到）；二、三级小节可以跨。
+★ 借来的那段以冒号收尾、后面是公式时，连公式和 where 段一起借（V63 图 5 曾被插在「……：」和式 (2) 之间）。
 """
 import re
 import shutil
@@ -160,6 +161,11 @@ def 挪(名, 已挪):
         k += 1
     if k >= len(块) or 块[k].startswith("## ") or "## References" in 块[k] or 块[k].startswith("## CRediT"):
         return f"{名} 后面没有正文段可借"
+    # 借来的段以冒号收尾、后面跟公式：公式和紧跟的 where 段一起借，图表不插进「……：」和公式之间
+    while 块[k].rstrip().endswith(":") and k + 1 < len(块) and 块[k + 1].lstrip().startswith("$$"):
+        k += 1
+        if k + 1 < len(块) and 块[k + 1].lstrip().startswith("where "):
+            k += 1
     新 = 块[:起] + 块[止 + 1:k + 1] + 块[起:止 + 1] + 块[k + 1:]
     英.write_text("\n\n".join(新) + "\n", "utf-8")
     已挪[名] = 已挪.get(名, 0) + 1

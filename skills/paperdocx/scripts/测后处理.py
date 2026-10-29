@@ -8,6 +8,7 @@ r"""后处理.py 的自测：拿 demo 搭一个临时项目，加进三种表 + 
   2. 分组表：首列留空的格竖向合并
   3. 列宽：数值格「0.185 ± 0.070」用不换行空格连住、列宽放得下整串；总宽不变；字号 9 pt
   4. 标红：⟦…⟧ 的括号去掉、里面的字是 C00000
+  5. 版面调整：挪图时不插进「……：」和公式之间
 不碰 demo 目录本身（复制到临时目录做）。
 """
 import re
@@ -111,6 +112,18 @@ def main():
               if r.font.color is not None and r.font.color.rgb is not None and str(r.font.color.rgb) == "C00000"]
         核(any("to be completed" in r.text for r in 红), "⟦…⟧ 里的字标成红色")
         核(not any("⟦" in p.text or "⟧" in p.text for p in d.paragraphs), "⟦⟧ 括号已去掉")
+
+        # 5. 版面调整.挪：借来的段以冒号收尾、后跟公式时，公式和 where 段一起借
+        测 = Path(td) / "冒号.md"
+        测.write_text("Intro.\n\n![](figures/a.png){width=10cm}\n\n**Figure 1.** Cap.\n\nThe flow is:\n\n"
+                     "$$\nx=1\n$$\n<!--eq:a-->\n\nwhere x is a thing.\n\nNext para.\n", "utf-8")
+        码 = ("import sys; 根, md = sys.argv[1:3]; sys.path.insert(0, 根); sys.argv = ['x']; import 版面调整 as V; "
+             "from pathlib import Path; V.英 = Path(md); print(V.挪('Figure 1', {}))")
+        r = subprocess.run(PY + ["-c", 码, str(这里), str(测)], cwd=项目,
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+        s = 测.read_text("utf-8")
+        核(r.returncode == 0 and s.index("where x is") < s.index("**Figure 1.**") < s.index("Next para"),
+           "版面调整不把图插进「……：」和公式之间" + ("" if r.returncode == 0 else " " + r.stderr[-300:]))
 
     print(f"\n后处理自测 {过}/{共} 通过")
     sys.exit(0 if 过 == 共 else 1)
