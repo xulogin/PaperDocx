@@ -157,8 +157,8 @@ def 挪(名, 已挪):
     起, 止 = 位
     k = 止 + 1
     while k < len(块) and not 是正文段(块[k]):
-        if 块[k].startswith("#"):
-            return f"{名} 后面是标题，不挪（图表留在首次引用的小节里）"
+        if 块[k].startswith("## "):
+            return f"{名} 后面是一级标题，不挪"
         if 块[k].lstrip().startswith(("![", "**Figure", "**Table")):
             return f"{名} 后面紧跟别的图表，不挪"
         k += 1
