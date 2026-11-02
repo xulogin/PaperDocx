@@ -104,7 +104,8 @@ def 段转同步串(p, 条目id表=None):
             else:
                 键 = f.item_keys()
                 refs = [条目id表.get(k, "?" + k) for k in 键]
-                片.append((None, "⟦c:%s⟧" % ";".join(refs)))
+                前 = f.prefix()
+                片.append((None, "⟦c:%s%s⟧" % (";".join(refs), "|" + 前 if 前 else "")))
             continue
         if 子.tag == qn("w:r"):
             if 子.find(MATH + "oMath") is not None:

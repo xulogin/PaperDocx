@@ -57,7 +57,7 @@ py -3.12 -X utf8 ../scripts/探参考docx.py 那本刊物的稿子.docx --配置
 
     # 图
     "图":     dict(号=11.0, 粗=False, 对齐="center",  行距=1.00, 前=10, 后=4,  随后=True),
-    "图注":   dict(号=9.5,  粗=False, 对齐="justify", 行距=1.15, 前=2,  后=14),
+    "图注":   dict(号=9.5,  粗=False, 对齐="justify", 行距=1.15, 前=2,  后=14, 不拆=True),
 
     # 表
     "表题":   dict(号=9.5,  粗=False, 对齐="justify", 行距=1.15, 前=14, 后=4,  随后=True),

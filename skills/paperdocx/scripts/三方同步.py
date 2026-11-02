@@ -65,7 +65,7 @@ def 载引用():
     反查 = {v: k for k, v in 渲染.items()}
     形 = sorted(渲染.values(), key=len, reverse=True)
     单 = "|".join(re.escape(s) for s in 形)
-    反查["__正则__"] = re.compile(r"\((%s)(?:; (?:%s))*\)" % (单, 单))
+    反查["__正则__"] = M.引用正则(单)
     import 出Word
     索引 = json.loads((出Word.找引用数据() / "zot_match_index.json").read_text("utf-8"))
     条目id表 = {v["itemKey"]: k for k, v in 索引.items()}

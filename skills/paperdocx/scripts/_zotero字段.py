@@ -136,8 +136,9 @@ def citation_instr(citation_items, display_text):
         rand_id(10))
 
 
-def bibliography_instr():
-    payload = {"uncited": [], "omitted": [], "custom": []}
+def bibliography_instr(uncited=()):
+    """`uncited` 是条目 URI 列表：正文没引但要留在文献表里，Refresh 时 Zotero 按它保留。"""
+    payload = {"uncited": [[u] for u in uncited], "omitted": [], "custom": []}
     return " {} {} CSL_BIBLIOGRAPHY ".format(
         ADDIN_BIBL, json.dumps(payload, ensure_ascii=False))
 
@@ -224,6 +225,11 @@ class Field(object):
                 if k:
                     out.append(k)
         return out
+
+    def prefix(self):
+        """第一条引用的说明文字（去掉连接用的「; 」），没有就是空串。"""
+        项 = (self.payload() or {}).get("citationItems") or [{}]
+        return (项[0].get("prefix") or "").rstrip("; ")
 
     def titles(self):
         p = self.payload() or {}

@@ -102,7 +102,8 @@ class 引用库:
         # 长的排前面，免得 "Liu et al., 2022" 把 "Liu, C. et al., 2023" 切一半
         形 = sorted(self.渲染.values(), key=len, reverse=True)
         单 = "|".join(re.escape(s) for s in 形)
-        self.正则 = re.compile(r"\((%s)(?:; (?:%s))*\)" % (单, 单))
+        self.正则 = M.引用正则(单)
+        self.前缀 = []     # `[[cite:ref1#0]]` 的说明文字，不过 pandoc，免得被改写或拆 run
 
     def 反查并正则(self):
         """给 `块模型.md转同步串` 用的 {渲染文本: refN} + `__正则__`。"""
@@ -113,8 +114,12 @@ class 引用库:
     def 打标记(self, 文本: str) -> str:
         """正文里的渲染引用 → `[[cite:ref1;ref2]]` 标记，给 pandoc 之后替换成字段。"""
         def 换(m):
-            部分 = [p.strip() for p in m.group(0)[1:-1].split(";")]
-            return "[[cite:%s]]" % ";".join(self.反查[p] for p in 部分)
+            前, 部分 = M.拆前缀引用(m.group(0)[1:-1], self.反查)
+            键 = ";".join(self.反查[p] for p in 部分)
+            if 前:
+                self.前缀.append(前)
+                键 += "#%d" % (len(self.前缀) - 1)
+            return "[[cite:%s]]" % 键
         return self.正则.sub(换, 文本)
 
 
@@ -180,7 +185,7 @@ def 造pandoc输入(块们, 库: 引用库):
             期望.append((b, "p", 1))
     文 = "\n\n".join(段) + "\n"
     for m in re.finditer(r"\[\[cite:([^\]]+)\]\]", 文):
-        被引.update(m.group(1).split(";"))
+        被引.update(m.group(1).partition("#")[0].split(";"))
     if 整句粗表题:
         print(f"  ⚠ {len(整句粗表题)} 个表题不是「只粗标签」的写法（块 {整句粗表题}），"
               "docx 里照 md 原样加粗。\n"
@@ -277,6 +282,14 @@ def _配(st, 规, 字体):
     pf.space_before = Pt(规["前"])
     pf.space_after = Pt(规["后"])
     pf.keep_with_next = bool(规.get("随后"))
+    pf.keep_together = bool(规.get("不拆"))
+    # ★ Word 默认允许标点挂到右边距外，「55%–60%」这种串会把整行顶出边距约 3 mm
+    ppr = st.element.get_or_add_pPr()
+    for 旧 in ppr.findall(qn("w:overflowPunct")):
+        ppr.remove(旧)
+    挂 = OxmlElement("w:overflowPunct")
+    挂.set(qn("w:val"), "0")
+    ppr.append(挂)
     pf.first_line_indent = Cm(0)
     if 规.get("悬挂cm"):
         pf.left_indent = Cm(规["悬挂cm"])
@@ -718,12 +731,14 @@ def 插引用(doc, 库: 引用库):
             for m in 匹:
                 if m.start() > 游:
                     锚 = _插文本(锚, 原[游:m.start()], rpr)
-                键 = m.group(1).split(";")
+                键串, _, 序 = m.group(1).partition("#")
+                键 = 键串.split(";")
+                前 = 库.前缀[int(序)] if 序 else ""
                 # ★ 显示文本直接用 md 里的渲染形式（`引用映射.tsv`），不用
                 #   Z.format_inline 现编。原因：四组重名作者（Liu C./Liu X. 等）
                 #   靠 CSL 的 disambiguate 消歧成 "Liu, X. et al., 2023"，
                 #   现编只会得到 "Liu et al., 2023"，没 Refresh 之前看着就是错的。
-                显 = "(" + "; ".join(库.渲染[k] for k in 键) + ")"
+                显 = "(" + (前 + "; " if 前 else "") + "; ".join(库.渲染[k] for k in 键) + ")"
                 项 = [{"id": 库.索引[k]["itemID"], "uris": [库.索引[k]["uri"]],
                       "itemData": 库.条目[k]} for k in 键]
                 # "Yang and Liu (Yang and Liu, 2026)" → Word 里显示 "Yang and Liu (2026)"
@@ -731,7 +746,9 @@ def 插引用(doc, 库: 引用库):
                 #   Z.author_string 现编：消歧过的形式是 "Liu, C. et al., 2023"，
                 #   现编只给 "Liu et al."，`endswith` 对不上，suppress-author
                 #   就不生效，Word 里印成 "Liu, C. et al. (Liu, C. et al., 2023)"。
-                if len(键) == 1:
+                if 前:
+                    项[0]["prefix"] = 前 + "; "
+                elif len(键) == 1:
                     形 = 库.渲染[键[0]]
                     作名 = re.sub(r",\s*(?:19|20)\d{2}[a-z]?$", "", 形)
                     if 原[: m.start()].rstrip().endswith(作名) or \
@@ -842,6 +859,7 @@ def 插文献(doc, 库: 引用库, 被引, csl):
     if 缺:
         raise SystemExit(f"⛔ 额外收录里的 {缺} 不在 references.json 里")
     要 = (set(被引) | 额外) - set(C.文献["排除"])
+    未引 = [库.索引[k]["uri"] for k in sorted(额外 - set(被引))]   # 写进书目字段，Refresh 不丢
     收 = [库.条目[k] for k in 库.条目 if k in 要]
     丢 = sorted(被引 & set(C.文献["排除"]))
     if 丢:
@@ -906,7 +924,7 @@ def 插文献(doc, 库: 引用库, 被引, csl):
         首 = 条[0]
         首ppr = 首.find(qn("w:pPr"))
         插点 = list(首).index(首ppr) + 1 if 首ppr is not None else 0
-        for r in reversed(Z.make_field_runs(Z.bibliography_instr(), "")[:3]):
+        for r in reversed(Z.make_field_runs(Z.bibliography_instr(未引), "")[:3]):
             首.insert(插点, r)
         条[-1].append(Z.make_field_runs("", "")[-1])
         p._p.getparent().remove(p._p)

@@ -248,6 +248,27 @@ def 规约(文本: str) -> str:
 哨兵 = re.compile(r"⟪/?[bisr]⟫|⟦m\d+⟧|⟦c:[^⟧]*⟧")
 
 
+def 引用正则(单: str):
+    r"""`单` 是所有渲染形式的 `|` 并集。认两种括号：
+        (Wang et al., 2022; Fan et al., 2017)          纯引用
+        (architectural models; Hallé et al., 1978)     说明文字 + 引用
+
+    ★ 说明文字不进普通文本：放进字段会被 Refresh 冲掉，放在字段外又会多一层括号。
+      它走 Zotero 的 prefix，Refresh 后原样印出来。带公式或粗斜体的说明文字不收
+      （prefix 只能是纯文本），这种括号保持死文本。说明里允许一层括号，如 E(n)-equivariant。
+    """
+    return re.compile(r"\((?:(?:[^()\n$*⟦]|\([^()\n]*\))+?; )?(?:%s)(?:; (?:%s))*\)" % (单, 单))
+
+
+def 拆前缀引用(内: str, 引用反查):
+    """括号里的内容 -> (说明文字, [渲染形式])；说明文字可含分号，不是引用就返回 ("", [])。"""
+    部分 = [p.strip() for p in 内.split(";")]
+    i = len(部分)
+    while i and 部分[i - 1] in 引用反查:
+        i -= 1
+    return "; ".join(部分[:i]), 部分[i:]
+
+
 def md转同步串(文本: str, 引用反查=None):
     r"""md 行内 → 同步串。返回 (串, 公式 LaTeX 列表, 引用 refN 组列表)。
 
@@ -263,11 +284,11 @@ def md转同步串(文本: str, 引用反查=None):
 
     if 引用反查 is not None:
         def 吃引用(m):
-            部分 = [p.strip() for p in m.group(0)[1:-1].split(";")]
-            if not all(p in 引用反查 for p in 部分):
+            前, 部分 = 拆前缀引用(m.group(0)[1:-1], 引用反查)
+            if not 部分:
                 return m.group(0)
             引用.append([引用反查[p] for p in 部分])
-            return "⟦c:%s⟧" % ";".join(引用[-1])
+            return "⟦c:%s%s⟧" % (";".join(引用[-1]), "|" + 前 if 前 else "")
 
         s = 引用反查["__正则__"].sub(吃引用, s)
 
@@ -342,11 +363,12 @@ def 同步串转md(串: str, 公式, 引用渲染=None) -> str:
                 raise ValueError("公式占位 %s 没有对应的 LaTeX" % t)
             out.append("$" + 公式[k] + "$")
         else:                                  # ⟦c:ref1;ref2⟧
-            refs = t[3:-1].split(";")
+            键, _, 前 = t[3:-1].partition("|")
             if 引用渲染 is None:
                 out.append(t)
             else:
-                out.append("(" + "; ".join(引用渲染[r] for r in refs) + ")")
+                out.append("(" + (前 + "; " if 前 else "")
+                           + "; ".join(引用渲染[r] for r in 键.split(";")) + ")")
     return "".join(out)
 
 

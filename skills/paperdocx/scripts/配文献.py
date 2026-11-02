@@ -246,7 +246,7 @@ def 配(条, 库, 库规):
 
 
 # ───────────────────────────────── 正文引用形式 ↔ refN
-括号引用 = re.compile(r"\(([^()]*?\b(?:19|20)\d{2}[a-z]?)\)")
+括号引用 = re.compile(r"\(((?:[^()]|\([^()]*\))*?\b(?:19|20)\d{2}[a-z]?)\)")
 叙述引用 = re.compile(
     r"((?:[A-Z][\wÀ-ɏ'’\-]*)(?:,\s*[A-Z]\.)?"
     r"(?:\s+(?:and|&)\s+[A-Z][\wÀ-ɏ'’\-]*)?(?:\s+et al\.)?)"
@@ -261,7 +261,9 @@ def 收引用形式(正文: str):
             p = p.strip()
             # 只有年份的括号是叙述式引用的后半截（"Yang and Liu (2026)"），
             # 不是独立的括号引用，由 叙述引用 那条路管
-            if re.search(r"[A-Za-z]", p):
+            # 结尾不是年份的是说明文字（"(architectural models; Hallé et al., 1978)"），
+            # 不是引用，出 Word 时进 Zotero 的 prefix
+            if re.search(r"[A-Za-z]", p) and re.search(r"\b(?:19|20)\d{2}[a-z]?$", p):
                 形.add(p)
     return 形, [(m.group(1), m.group(2)) for m in 叙述引用.finditer(正文)]
 
