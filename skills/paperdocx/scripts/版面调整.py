@@ -145,6 +145,9 @@ def 是正文段(b):
     return not (b.startswith(("#", "!", "|", "$$", "<!--", "**Figure", "**Table", "Note:")))
 
 
+列表项 = re.compile(r"^(?:\(\d+\)|（\d+）)")
+
+
 def 挪(名, 已挪):
     md = 英.read_text("utf-8")
     块 = 分块(md)
@@ -154,13 +157,15 @@ def 挪(名, 已挪):
     起, 止 = 位
     k = 止 + 1
     while k < len(块) and not 是正文段(块[k]):
-        if 块[k].startswith("## "):
-            return f"{名} 后面是一级标题，不挪"
+        if 块[k].startswith("#"):
+            return f"{名} 后面是标题，不挪（图表留在首次引用的小节里）"
         if 块[k].lstrip().startswith(("![", "**Figure", "**Table")):
             return f"{名} 后面紧跟别的图表，不挪"
         k += 1
     if k >= len(块) or 块[k].startswith("## ") or "## References" in 块[k] or 块[k].startswith("## CRediT"):
         return f"{名} 后面没有正文段可借"
+    if 列表项.match(块[k]) or (止 + 1 < len(块) and 列表项.match(块[止 + 1])):
+        return f"{名} 紧挨 (1)(2)(3) 列表，不挪"
     # 借来的段以冒号收尾、后面跟公式：公式和紧跟的 where 段一起借，图表不插进「……：」和公式之间
     while 块[k].rstrip().endswith(":") and k + 1 < len(块) and 块[k + 1].lstrip().startswith("$$"):
         k += 1

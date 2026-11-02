@@ -82,7 +82,9 @@ $job = Start-Job -ScriptBlock {
 } -ArgumentList $src, $pdf
 if (-not (Wait-Job $job -Timeout $TimeoutSec)) {
   Stop-Job $job; Remove-Job $job -Force
-  Get-Process WINWORD -ErrorAction SilentlyContinue | Stop-Process -Force
+  # 只结束这次开的 Word，作者开着的文档不能动
+  $原有 = @($在跑 | ForEach-Object { $_.Id })
+  Get-Process WINWORD -ErrorAction SilentlyContinue | Where-Object { $原有 -notcontains $_.Id } | Stop-Process -Force
   throw "Word 超过 $TimeoutSec 秒还没导完。先确认没有别的 Word 在跑；还卡就是图太大了，调小 排版配置.图['送入dpi']。"
 }
 Receive-Job $job | Out-Null; Remove-Job $job -Force
